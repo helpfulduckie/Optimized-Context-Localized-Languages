@@ -22690,6 +22690,10 @@ function LocalizedLanguages(hook, str) {
             change: false,
             // Truncation limit estimated from original context length
             limit: 4000,
+            // Optimized Context was on during the last context hook (the input hook may not be told)
+            optimized: false,
+            // The exact text LoLa last added to state.memory.frontMemory
+            front: "",
             // Tracking for an informational story card
             card: {
                 // Previous action count, used for retry/erase detection
@@ -23444,6 +23448,9 @@ function LocalizedLanguages(hook, str) {
         return;
     }
     mergeSettings();
+    // Adventures started before the front memory fields existed
+    state.LocalizedLanguages.optimized ??= false;
+    state.LocalizedLanguages.front ??= "";
     // Shorthand reference to the LoLa state
     const LoLa = Object.seal(state.LocalizedLanguages);
     Object.seal(LoLa.card);
@@ -23478,12 +23485,69 @@ function LocalizedLanguages(hook, str) {
             "(?<=" + components[0] + ")" + pair[0] + "(?=" + components[1] + ")"
         ), components[2] ?? "g"), pair[1]);
     };
+    // Assemble system directives
+    const systemBlock = (tln) => (
+        "\n\n<SYSTEM lang=\"" + (tln.iso639set1 || LoLa.language) + "\">" +
+        ["", ...tln.directives].join("\n- ") +
+        "\n</SYSTEM>"
+    );
+    // Determine which language the creator intended for the default experience
+    const getScenarioLanguage = () => (
+        (typeof S.SCENARIO_CONTENT_LANGUAGE === "string")
+        ? formatLanguage(S.SCENARIO_CONTENT_LANGUAGE)
+        : en
+    );
+    // Is Optimized Context on? The input hook may not be told, so fall back to what the last context hook saw
+    const isOptimized = () => (
+        (typeof info?.useCacheEfficient === "boolean") ? info.useCacheEfficient : LoLa.optimized
+    );
+    // Under Optimized Context, context text past AI Dungeon's own budget is cut from the end of an append.
+    // Measured live: the room is about info.maxChars - text.length minus a margin of roughly
+    // 960 characters plus 3.6 per token of response length, so 2500 covers the 400-token maximum.
+    const APPEND_MARGIN = 2500;
+    // Under Optimized Context, the language guidance lives in front memory, the one place at the end of the
+    // context that AI Dungeon always keeps. It keeps about the last 463 characters, cutting from the start,
+    // so the reminder goes last.
+    const frontBlock = () => {
+        const tln = translations[LoLa.language];
+        const parts = [];
+        if ((LoLa.language !== en) || (getScenarioLanguage() !== en)) {
+            parts.push(systemBlock(tln).trimStart());
+        }
+        if (LoLa.language !== en) {
+            parts.push("[ " + tln.reminder + " ]");
+        }
+        return parts.join("\n\n");
+    };
+    // Put LoLa's block in front memory without disturbing what other scripts keep there
+    const setFrontMemory = (block) => {
+        if ((typeof state.memory !== "object") || (state.memory === null)) {
+            state.memory = {};
+        }
+        const memory = (typeof state.memory.frontMemory === "string") ? state.memory.frontMemory : "";
+        if ((LoLa.front === "") ? (block === "") : ((LoLa.front.trimStart() === block) && memory.includes(LoLa.front))) {
+            // Already in place
+            return;
+        }
+        // Remove LoLa's previous block, then add the current one after anything other scripts wrote
+        const others = (LoLa.front === "") ? memory : memory.replace(LoLa.front, "");
+        const added = (block === "") ? "" : ((others === "") ? block : "\n" + block);
+        state.memory.frontMemory = others + added;
+        LoLa.front = added;
+    };
     if (hook === "context") {
         // Called from the Context modifier
         // Optimized Context discards the whole returned context unless it only appends to the original
         const optimized = isCacheEfficient();
+        LoLa.optimized = optimized;
         // The untouched context, which Optimized Context additions must extend
         const original = str;
+        if (!optimized && (LoLa.front !== "")) {
+            // Optimized Context was turned off, but this context still ends with LoLa's front memory block
+            // The stock pass below adds its own language block, so drop the old one here and in memory
+            str = str.replace(LoLa.front.trim(), "");
+            setFrontMemory("");
+        }
         if (!optimized) {
             // Remove the language selection header and prepend a linebreak
             str = "\n\n" + str.replace(/\s*\{Language: [\s\S]*?\}\s*/g, " ").trimStart();
@@ -23610,18 +23674,8 @@ function LocalizedLanguages(hook, str) {
             }
             return;
         })();
-        // Assemble system directives
-        const system = () => (
-            "\n\n<SYSTEM lang=\"" + (tln.iso639set1 || LoLa.language) + "\">" +
-            ["", ...tln.directives].join("\n- ") +
-            "\n</SYSTEM>"
-        );
-        // Determine which language the creator intended for the default experience
-        const scenarioLanguage = (
-            (typeof S.SCENARIO_CONTENT_LANGUAGE === "string")
-            ? formatLanguage(S.SCENARIO_CONTENT_LANGUAGE)
-            : en
-        );
+        const system = () => systemBlock(tln);
+        const scenarioLanguage = getScenarioLanguage();
         // Add instructions to context if required (avoid if able)
         const instruct = (context) => (
             ((LoLa.language !== scenarioLanguage) || (S.USE_GENERIC_AI_INSTRUCTIONS === true))
@@ -23661,20 +23715,15 @@ function LocalizedLanguages(hook, str) {
         // Finalize context before exporting
         const finalize = (context) => truncate(instruct(context));
         if (optimized) {
-            // Optimized Context: the same guidance as below, but only ever appended
+            // Optimized Context: the same guidance as below, but the language block and reminder go in front
+            // memory and everything else is only ever appended
             // No header translation, no Author's Note reminder, and no truncation
+            // The input hook already set front memory for this turn; this repairs it for the next one if another
+            // script replaced it, since front memory changed here only reaches the model a turn later
+            setFrontMemory(frontBlock());
             const additions = [];
             // The opening seed ends mid-scene, so the story continues on the same line like instruct() does
             let ending = "\n\n";
-            if ((LoLa.language !== en) || (scenarioLanguage !== en)) {
-                additions.push(system().trimStart());
-            }
-            if ((LoLa.language !== scenarioLanguage) || (S.USE_GENERIC_AI_INSTRUCTIONS === true)) {
-                additions.push(tln.instructions.join("\n- "));
-            }
-            if (LoLa.language !== en) {
-                additions.push("[ " + tln.reminder + " ]");
-            }
             if (!isOpening()) {
                 if (LoLa.change) {
                     // Seed the new language once after a mid-adventure change
@@ -23697,6 +23746,15 @@ function LocalizedLanguages(hook, str) {
                 }
                 additions.push(tln.opening.join("\n\n"));
                 ending = " ";
+            }
+            if ((LoLa.language !== scenarioLanguage) || (S.USE_GENERIC_AI_INSTRUCTIONS === true)) {
+                // The generic instructions only go in whole, and only if the append still fits in the room
+                // AI Dungeon leaves; otherwise it would cut them mid-list, or cut the seed that follows them
+                const instructions = tln.instructions.join("\n- ");
+                const room = (Number.isInteger(info?.maxChars) ? info.maxChars : 0) - original.length - APPEND_MARGIN;
+                if ((["", instructions, ...additions].join("\n\n") + ending).length <= room) {
+                    additions.unshift(instructions);
+                }
             }
             if (additions.length === 0) {
                 return original;
@@ -23764,6 +23822,9 @@ function LocalizedLanguages(hook, str) {
     }
     // Is this input a Do or Say action?
     const isDoSay = () => (str.startsWith("\n> "));
+    // The input hook runs before AI Dungeon builds the context, so front memory set here reaches this turn
+    const syncFrontMemory = () => setFrontMemory(isOptimized() ? frontBlock() : "");
+    syncFrontMemory();
     // Language command match
     const languageMatch = text.match(languagePattern);
     if (!languageMatch) {
@@ -23886,6 +23947,8 @@ function LocalizedLanguages(hook, str) {
         LoLa.card.show = true;
         return false;
     })();
+    // A new language needs its own block in front memory this turn
+    syncFrontMemory();
     (() => {
         // If Auto-Cards is installed, do some extra stuff
         if (!state.AutoCards || !hasAutoCards()) {

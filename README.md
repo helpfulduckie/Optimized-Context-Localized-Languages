@@ -6,10 +6,12 @@ This fork makes LoLa work when AI Dungeon's **Optimized Context** setting is on.
 
 **With Optimized Context off (`info.useCacheEfficient` is false), LoLa works exactly as it always has,** apart from the two bug fixes below. Header translation, the Author's Note reminder, the language block and truncation are all unchanged.
 
-**With Optimized Context on, LoLa only appends,** in this order:
-- the `<SYSTEM lang="…">` block with its two language directives
-- the generic instructions, when your language differs from the scenario's (or `USE_GENERIC_AI_INSTRUCTIONS` is on)
-- the `[ reminder ]` line
+**With Optimized Context on, the language guidance goes in front memory (`state.memory.frontMemory`).** AI Dungeon places front memory at the very end of the context and always keeps it, while text a script appends only gets whatever budget is left over and is cut off at the end when there isn't enough. LoLa writes the `<SYSTEM lang="…">` block with its two language directives, then the `[ reminder ]` line. It writes them in the Input tab so they reach the same turn, and checks them again in the Context tab in case another script replaced front memory; a Context-tab write only reaches the model on the next turn. Other scripts' front memory text is left in place, with LoLa's block after it.
+
+**Front memory holds only about the last 463 characters, and AI Dungeon cuts from the start.** LoLa's block is at most 257 characters in any language, with the reminder last. In a bundle, everything scripts put in front memory shares those 463 characters.
+
+**Everything else is appended, and only when it fits:**
+- the generic instructions, when your language differs from the scenario's (or `USE_GENERIC_AI_INSTRUCTIONS` is on). They go in whole only if `info.maxChars` minus the context length, minus a 2500-character margin, leaves room for them, and are skipped that turn otherwise. The margin was measured live: about 960 characters plus 3.6 per token of response length.
 - the opening seed, at the start of an adventure or once after a mid-adventure language change
 
 It does not translate headers, edit the Author's Note, remove the `{Language: …}` command, or truncate. The "You"/"You say" prefix of Do/Say actions is still rewritten into your language as you submit them, because that happens in the Input tab, which Optimized Context doesn't restrict.
@@ -23,7 +25,7 @@ It does not translate headers, edit the Author's Note, remove the `{Language: �
 Both fixes were found by the [InnerSelf-LoLa merge](https://github.com/DevilVonHell/InnerSelf-LoLa-Merge) (their K10 and K9).
 
 ### Tests
-`npm install`, then `npm test`. The suite runs the real library and tabs for both `src` variants in a small AI Dungeon sandbox (`test/aid.js`). It checks that output with Optimized Context off matches stock LoLa at commit `3a515ba`, and that output with it on always begins with the original context byte-for-byte.
+`npm install`, then `npm test`. The suite runs the real library and tabs for both `src` variants in a small AI Dungeon sandbox (`test/aid.js`). It checks that output with Optimized Context off matches stock LoLa at commit `3a515ba`, that output with it on always begins with the original context byte-for-byte, and that LoLa's front memory block shares front memory with other scripts.
 
 ## Overview
 Localized Languages (LoLa) is a context overhaul script for playing AI Dungeon in your language of choice. LoLa also improves player inputs and supports (optional) [Auto-Cards](https://github.com/LewdLeah/Auto-Cards) integration. It’s free and open-source for anyone to use however they see fit. Creators are welcome to use LoLa for multilingual accessibility in their published scenarios. Fully compliant with international standard ISO 639-1 and more~ ❤️

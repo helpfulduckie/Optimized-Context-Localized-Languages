@@ -49,21 +49,83 @@ describe.each(["full", "noAC"])("%s variant", (variant) => {
             expect(adventureIn("english", { variant }).context(context, { optimized: true })).toBe(context);
         });
 
-        test("only appends the language block and reminder", () => {
+        test("puts the language block and reminder in front memory, reminder last", () => {
+            const adventure = adventureIn("german", { variant });
+            const result = adventure.context(buildContext(), { optimized: true });
+            expect(result).not.toContain("<SYSTEM");
+            const front = adventure.state.memory.frontMemory;
+            expect(front.startsWith("<SYSTEM lang=\"de\">")).toBe(true);
+            expect(front).toContain(germanStrings().directives.trim());
+            expect(front).toMatch(/\n\n\[ [^\]]+ \]$/);
+        });
+
+        test.each(["german", "spanish", "russian", "hindi", "japanese", "chinese", "arabic"])(
+            "the %s front memory block fits AI Dungeon's 463-character front memory",
+            (language) => {
+                const adventure = adventureIn(language, { variant });
+                adventure.context(buildContext(), { optimized: true });
+                expect(adventure.state.memory.frontMemory.length).toBeGreaterThan(0);
+                expect(adventure.state.memory.frontMemory.length).toBeLessThanOrEqual(463);
+            }
+        );
+
+        test("the input hook writes front memory so it reaches the same turn", () => {
+            const adventure = new Adventure({ variant }).skipOpening();
+            adventure.input("{Language: German}", { info: { actionCount: 10, useCacheEfficient: true } });
+            expect(adventure.state.memory.frontMemory).toContain("<SYSTEM lang=\"de\">");
+        });
+
+        test("the input hook falls back to the last context hook when it isn't told the setting", () => {
+            const adventure = adventureIn("german", { variant });
+            adventure.context(buildContext(), { optimized: true });
+            adventure.state.memory.frontMemory = "";
+            adventure.input("\n> You wait.\n");
+            expect(adventure.state.memory.frontMemory).toContain("<SYSTEM lang=\"de\">");
+        });
+
+        test("keeps other scripts' front memory and repairs its own block once", () => {
+            const adventure = adventureIn("german", { variant });
+            adventure.state.memory = { frontMemory: "[It is noon.]" };
+            adventure.context(buildContext(), { optimized: true });
+            const front = adventure.state.memory.frontMemory;
+            expect(front.startsWith("[It is noon.]\n<SYSTEM lang=\"de\">")).toBe(true);
+            // Unchanged when nothing removed it
+            adventure.context(buildContext(), { optimized: true });
+            expect(adventure.state.memory.frontMemory).toBe(front);
+            // Another script rewrites front memory; LoLa adds its block back after it
+            adventure.state.memory.frontMemory = "[It is dusk.]";
+            adventure.context(buildContext(), { optimized: true });
+            expect(adventure.state.memory.frontMemory).toBe(front.replace("noon", "dusk"));
+        });
+
+        test("appends the generic instructions when they fit in the room AI Dungeon leaves", () => {
             const context = buildContext();
             const result = adventureIn("german", { variant }).context(context, { optimized: true });
             expect(result.startsWith(context)).toBe(true);
-            const added = result.slice(context.length);
-            expect(added).toContain("<SYSTEM lang=\"de\">");
-            expect(added).toContain(germanStrings().directives.trim());
-            expect(added).toMatch(/\[ [^\]]+ \]\n\n$/);
+            expect(result.slice(context.length)).toMatch(/^\n\n\S[\s\S]*\n- [\s\S]*\n\n$/);
         });
 
-        test("appends even when the context is too long for stock LoLa's truncation", () => {
+        test("skips the generic instructions when they don't fit", () => {
+            const context = buildContext();
+            const maxChars = context.length + 2500 + 100;
+            expect(adventureIn("german", { variant }).context(context, { optimized: true, maxChars })).toBe(context);
+        });
+
+        test("leaves the context alone when it is too long for stock LoLa's truncation", () => {
             const story = "The rain keeps falling on the keep. ".repeat(400);
             const context = buildContext({ story });
             const result = adventureIn("german", { variant }).context(context, { optimized: true, maxChars: 4000 });
-            expect(result.startsWith(context)).toBe(true);
+            expect(result).toBe(context);
+        });
+
+        test("turning it off removes the front memory block without doubling the language block", () => {
+            const adventure = adventureIn("german", { variant });
+            adventure.context(buildContext(), { optimized: true });
+            const block = adventure.state.memory.frontMemory;
+            // AI Dungeon still includes this turn's front memory at the end of the context
+            const result = adventure.context(buildContext({ tail: "\n" + block }));
+            expect(result.split("<SYSTEM lang=\"de\">").length).toBe(2);
+            expect(adventure.state.memory.frontMemory).toBe("");
         });
 
         test("appends the opening seed at the start of an adventure", () => {
