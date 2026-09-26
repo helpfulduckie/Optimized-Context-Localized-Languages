@@ -1,3 +1,5 @@
+// @cache-compatible
+
 // Your "Context" tab should look like this
 const modifier = (text) => {
   // Your other context modifier scripts go here (preferred)
