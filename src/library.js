@@ -1,5 +1,9 @@
 // Your "Library" tab should look like this
 
+// WTG patch: Auto-Cards control cards use WTG's system card type, which WTG's
+// timestamping skips (see WTG-PATCHES.md).
+const SETTING = 'zz_Settings';
+
 /*
 Main control panel for scenario creator convenience
 Settings defined here will override their counterparts elsewhere
@@ -27410,7 +27414,7 @@ function AutoCards(inHook, inText, inStop) {
         function getConfigureCardTemplate() {
             const names = getControlVariants().configure;
             return O.f({
-                type: AC.config.defaultCardType,
+                type: SETTING,
                 title: names.title,
                 keys: names.keys,
                 entry: getConfigureCardEntry(),
@@ -27516,7 +27520,7 @@ function AutoCards(inHook, inText, inStop) {
         function getEnableCardTemplate() {
             const names = getControlVariants().enable;
             return O.f({
-                type: AC.config.defaultCardType,
+                type: SETTING,
                 title: names.title,
                 keys: names.keys,
                 entry: prose(
