@@ -1,9 +1,10 @@
-// Your "Input" tab should look like this
+
 const modifier = (text) => {
-  // Your other input modifier scripts go here (preferred)
   text = AutoCards("input", text);
   text = LocalizedLanguages("input", text);
-  // Your other input modifier scripts go here (alternative)
+  // WTG patch: remove a "LoLa Config" card left by older WTG + LoLa builds (see WTG-PATCHES.md)
+  const lolaConfigIndex = storyCards.findIndex(c => c.title === "LoLa Config" && c.type === "DELETABLE");
+  if (lolaConfigIndex !== -1) removeStoryCard(lolaConfigIndex);
   return { text };
 };
 modifier(text);
