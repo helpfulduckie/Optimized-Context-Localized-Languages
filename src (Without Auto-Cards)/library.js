@@ -22408,6 +22408,14 @@ function LocalizedLanguages(hook, str) {
         ((info?.actionCount ?? 3) < 3)
         && !history.some(action => action.type === "continue")
     );
+    // Is AI Dungeon's Optimized Context enabled? If so, context modifications may only append text
+    const isCacheEfficient = () => {
+        try {
+            return (info?.useCacheEfficient === true);
+        } catch (error) {
+            return false;
+        }
+    };
     // Capitalize the first letter of each word in a string
     const capitalize = (s) => s.replace(/(^| |-)([a-z])/g, (_, a, b) => a + b.toUpperCase());
     // Add a linebreak to the end of a string
@@ -22441,12 +22449,6 @@ function LocalizedLanguages(hook, str) {
                 // info.maxChars is only defined onContext
                 // Measure the original context length for later truncation guidance
                 state.LocalizedLanguages.limit = text.length;
-                return true;
-            } else if (state.LocalizedLanguages.change && !isOpening()) {
-                // Attempt to change the language mid-way through the adventure
-                // (Unreliable, yes, but better than nothing)
-                text = "## " + translations[state.LocalizedLanguages.language].opening[0] + "\n";
-                state.LocalizedLanguages.change = false;
                 return true;
             } else if (text.includes("<|im_start|>")) {
                 // "Raw Model Output" is enabled, remove unwanted ChatML tokens
@@ -23300,16 +23302,22 @@ function LocalizedLanguages(hook, str) {
     };
     if (hook === "context") {
         // Called from the Context modifier
-        // Remove the language selection header and prepend a linebreak
-        str = "\n\n" + str.replace(/\s*\{Language: [\s\S]*?\}\s*/g, " ").trimStart();
-        for (const [pattern, replacement] of [
-            [/(?<=\n)World Lore(?=:\n)/g, "Narrative Entities"],
-            [/(?<=\n)Story Summary(?=:\n)/g, "Story History"],
-            [/(?<=\n)(?:Recent )?Memories(?=:\n)/g, "Past Events"],
-            [/(?<=\nRecent Story:)\s*/, "<LANG>"]
-        ]) {
-            // Modernize 3 context element headers and insert a temporary truncation marker token
-            str = str.replace(pattern, replacement);
+        // Optimized Context discards the whole returned context unless it only appends to the original
+        const optimized = isCacheEfficient();
+        // The untouched context, which Optimized Context additions must extend
+        const original = str;
+        if (!optimized) {
+            // Remove the language selection header and prepend a linebreak
+            str = "\n\n" + str.replace(/\s*\{Language: [\s\S]*?\}\s*/g, " ").trimStart();
+            for (const [pattern, replacement] of [
+                [/(?<=\n)World Lore(?=:\n)/g, "Narrative Entities"],
+                [/(?<=\n)Story Summary(?=:\n)/g, "Story History"],
+                [/(?<=\n)(?:Recent )?Memories(?=:\n)/g, "Past Events"],
+                [/(?<=\nRecent Story:)\s*/, "<LANG>"]
+            ]) {
+                // Modernize 3 context element headers and insert a temporary truncation marker token
+                str = str.replace(pattern, replacement);
+            }
         }
         // Ensure the final context still fits within its original length capacity
         // Remove the oldest recent story text first
@@ -23444,7 +23452,13 @@ function LocalizedLanguages(hook, str) {
         ) + (() => {
             if (!isOpening()) {
                 // This context does not represent the opening action
-                return context;
+                if (!LoLa.change) {
+                    return context;
+                }
+                // The language changed mid-adventure, so seed the new language once at the end of context
+                // (This used to replace the turn's output and remain in the story forever)
+                LoLa.change = false;
+                return breakEnd(context) + tln.opening[0] + "\n\n";
             }
             // Allow the scenario to open according to the creator's intentions
             if (!(scenarioLanguage in factories)) {
@@ -23468,6 +23482,49 @@ function LocalizedLanguages(hook, str) {
         })();
         // Finalize context before exporting
         const finalize = (context) => truncate(instruct(context));
+        if (optimized) {
+            // Optimized Context: the same guidance as below, but only ever appended
+            // No header translation, no Author's Note reminder, and no truncation
+            const additions = [];
+            // The opening seed ends mid-scene, so the story continues on the same line like instruct() does
+            let ending = "\n\n";
+            if ((LoLa.language !== en) || (scenarioLanguage !== en)) {
+                additions.push(system().trimStart());
+            }
+            if ((LoLa.language !== scenarioLanguage) || (S.USE_GENERIC_AI_INSTRUCTIONS === true)) {
+                additions.push(tln.instructions.join("\n- "));
+            }
+            if (LoLa.language !== en) {
+                additions.push("[ " + tln.reminder + " ]");
+            }
+            if (!isOpening()) {
+                if (LoLa.change) {
+                    // Seed the new language once after a mid-adventure change
+                    LoLa.change = false;
+                    additions.push(tln.opening[0]);
+                }
+            } else if (!(scenarioLanguage in factories)) {
+                throw new Error("\n\n" +
+                    "S.SCENARIO_CONTENT_LANGUAGE = \"" + S.SCENARIO_CONTENT_LANGUAGE + "\"\n\n" +
+                    "This language name is not recognized by LoLa!"
+                );
+            } else if (
+                (LoLa.language !== scenarioLanguage)
+                || /(?:^|\n)Recent Story:\s*(?:\[[\s\S]*\])?\s*$/.test(original)
+            ) {
+                // Same rule as instruct(): seed the opening unless the creator's own opening already fits
+                if (hasAutoCards()) {
+                    // Postpone AC processes by 2 turns for safety
+                    AutoCards().API.postponeEvents(2);
+                }
+                additions.push(tln.opening.join("\n\n"));
+                ending = " ";
+            }
+            if (additions.length === 0) {
+                return original;
+            }
+            return original + "\n\n" + additions.join("\n\n") + ending;
+        }
         if (LoLa.language === en) {
             // Translation is skipped for English adventures
             return finalize(((scenarioLanguage === en) ? "" : system()) + str);
@@ -23501,7 +23558,8 @@ function LocalizedLanguages(hook, str) {
             const actionIndex = str.lastIndexOf(actionText);
             if (actionIndex !== -1) {
                 // Used to implement the reminder note similar to the vanilla Author's Note
-                return str.slice(0, actionIndex).trimEnd() + note + actionText;
+                // Keep everything from the action onward, other scripts may have appended text after it
+                return str.slice(0, actionIndex).trimEnd() + note + str.slice(actionIndex);
             } else if (
                 state.AutoCards
                 && state.AutoCards.config.doAC

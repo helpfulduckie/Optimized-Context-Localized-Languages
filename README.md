@@ -1,5 +1,30 @@
 # Localized Languages (LoLa)
 Made by LewdLeah ❤️
+
+## About this fork: Optimized Context
+This fork makes LoLa work when AI Dungeon's **Optimized Context** setting is on. Optimized Context accepts a change to the context only if the script appends text to the end of it. Any other change, anywhere in the context, and AI Dungeon discards the script's whole context modification for that turn. Stock LoLa rewrites the context throughout, so under Optimized Context none of its language guidance reached the model.
+
+**With Optimized Context off (`info.useCacheEfficient` is false), LoLa works exactly as it always has,** apart from the two bug fixes below. Header translation, the Author's Note reminder, the language block and truncation are all unchanged.
+
+**With Optimized Context on, LoLa only appends,** in this order:
+- the `<SYSTEM lang="…">` block with its two language directives
+- the generic instructions, when your language differs from the scenario's (or `USE_GENERIC_AI_INSTRUCTIONS` is on)
+- the `[ reminder ]` line
+- the opening seed, at the start of an adventure or once after a mid-adventure language change
+
+It does not translate headers, edit the Author's Note, remove the `{Language: …}` command, or truncate. The "You"/"You say" prefix of Do/Say actions is still rewritten into your language as you submit them, because that happens in the Input tab, which Optimized Context doesn't restrict.
+
+**Auto-Cards pauses under Optimized Context.** Its card memories, trimming and generation prompts all rewrite the context, so with the setting on it passes the context through untouched. It won't start generating a card, and it won't capture a story output as a card. Card requests, including ones made with `/ac`, wait and resume once Optimized Context is off. Its control cards keep working.
+
+### Bug fixes (apply with Optimized Context on or off)
+- **A mid-adventure language change no longer replaces that turn's output.** Stock LoLa overwrote the model's reply with a "Continue our story…" line, which then stayed in the story permanently. The prompt now goes once at the end of that turn's context instead.
+- **The reminder no longer deletes text after the last action.** When there was no Author's Note, stock LoLa rebuilt the end of the context from the last action's text and dropped anything after it, including other scripts' instructions.
+
+Both fixes were found by the [InnerSelf-LoLa merge](https://github.com/DevilVonHell/InnerSelf-LoLa-Merge) (their K10 and K9).
+
+### Tests
+`npm install`, then `npm test`. The suite runs the real library and tabs for both `src` variants in a small AI Dungeon sandbox (`test/aid.js`). It checks that output with Optimized Context off matches stock LoLa at commit `3a515ba`, and that output with it on always begins with the original context byte-for-byte.
+
 ## Overview
 Localized Languages (LoLa) is a context overhaul script for playing AI Dungeon in your language of choice. LoLa also improves player inputs and supports (optional) [Auto-Cards](https://github.com/LewdLeah/Auto-Cards) integration. It’s free and open-source for anyone to use however they see fit. Creators are welcome to use LoLa for multilingual accessibility in their published scenarios. Fully compliant with international standard ISO 639-1 and more~ ❤️
 ## Supported Languages

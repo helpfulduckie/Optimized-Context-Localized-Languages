@@ -1,0 +1,16 @@
+{
+  "name": "optimized-context-localized-languages",
+  "private": true,
+  "description": "Localized Languages (LoLa) for AI Dungeon, working under Optimized Context",
+  "license": "MIT",
+  "scripts": {
+    "test": "jest"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "testTimeout": 60000
+  },
+  "devDependencies": {
+    "jest": "^30.3.0"
+  }
+}
