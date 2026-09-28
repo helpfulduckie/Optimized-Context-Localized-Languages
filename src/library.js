@@ -31,6 +31,10 @@ globalThis.MainSettings = (class MainSettings {
         USE_GENERIC_AI_INSTRUCTIONS: false
         // (true or false)
         ,
+        // Is LoLa installed as an Adventure Script? (keeps its instructions out of front memory)
+        ADVENTURE_SCRIPT: false
+        // (true or false)
+        ,
         // Which language did you use to write your scenario's plot components?
         SCENARIO_CONTENT_LANGUAGE: "english"
         // Any language from the list of supported languages
@@ -200,6 +204,11 @@ function LocalizedLanguages(hook, str) {
     ,
     // Always add generic AI instructions to context?
     USE_GENERIC_AI_INSTRUCTIONS: false
+    // (true or false)
+    ,
+    // Is LoLa installed as an Adventure Script? Adventure Scripts may not write front memory, so under
+    // Optimized Context LoLa keeps its instructions in a pinned "LoLa Instructions" story card instead
+    ADVENTURE_SCRIPT: false
     // (true or false)
     ,
     // Which language did you use to write your scenario's plot components?
@@ -22698,6 +22707,8 @@ function LocalizedLanguages(hook, str) {
             optimized: false,
             // The exact text LoLa last added to state.memory.frontMemory
             front: "",
+            // The "LoLa Instructions" card was pinned by LoLa's last write (Adventure Script installs only)
+            pinned: false,
             // Tracking for an informational story card
             card: {
                 // Previous action count, used for retry/erase detection
@@ -23509,19 +23520,74 @@ function LocalizedLanguages(hook, str) {
     // Measured live: the room is about info.maxChars - text.length minus a margin of roughly
     // 960 characters plus 3.6 per token of response length, so 2500 covers the 400-token maximum.
     const APPEND_MARGIN = 2500;
+    // Should the generic AI instructions go in? (avoid if able)
+    const wantsInstructions = () => (
+        (LoLa.language !== getScenarioLanguage()) || (S.USE_GENERIC_AI_INSTRUCTIONS === true)
+    );
+    // Is LoLa installed as an Adventure Script, which may not write front memory?
+    const isAdventureScript = () => (S.ADVENTURE_SCRIPT === true);
     // Under Optimized Context, the language guidance lives in front memory, the one place at the end of the
     // context that AI Dungeon always keeps. It keeps about the last 463 characters, cutting from the start,
-    // so the reminder goes last.
-    const frontBlock = () => {
+    // so the reminder goes last. The instructions card has no such limit, so it also carries the generic
+    // instructions.
+    const guidanceBlock = (withInstructions) => {
         const tln = translations[LoLa.language];
         const parts = [];
         if ((LoLa.language !== en) || (getScenarioLanguage() !== en)) {
             parts.push(systemBlock(tln).trimStart());
         }
+        if (withInstructions && wantsInstructions()) {
+            parts.push(tln.instructions.join("\n- "));
+        }
         if (LoLa.language !== en) {
             parts.push("[ " + tln.reminder + " ]");
         }
         return parts.join("\n\n");
+    };
+    const frontBlock = () => guidanceBlock(false);
+    const cardBlock = () => guidanceBlock(true);
+    // Adventure Scripts under Optimized Context keep the guidance in a pinned story card, which AI Dungeon
+    // places near the end of the context there
+    const INSTRUCTIONS_CARD = "LoLa Instructions";
+    const INSTRUCTIONS_NOTES = (
+        "Managed by Localized Languages. On Optimized Context models in an Adventure Script install, holds " +
+        "LoLa's language instructions for the AI. Unused otherwise. Pinned while in use; edits to the entry " +
+        "are overwritten."
+    );
+    const findInstructionsCard = () => (Array.isArray(globalThis.storyCards) ? storyCards.find(card => (
+        (typeof card === "object") && (card !== null) && (card.title === INSTRUCTIONS_CARD)
+    )) : undefined);
+    // Keep the instructions card in step with the block, or unpin it when the block is empty
+    // The card is unpinned rather than removed so it keeps its place, and never created just to be unpinned
+    const setInstructionsCard = (block) => {
+        LoLa.pinned = false;
+        if (!Array.isArray(globalThis.storyCards)) {
+            return;
+        }
+        let card = findInstructionsCard();
+        if (!card) {
+            if (block === "") {
+                return;
+            }
+            addStoryCard(INSTRUCTIONS_CARD, block, "class", INSTRUCTIONS_CARD, INSTRUCTIONS_NOTES);
+            card = findInstructionsCard();
+            if (!card) {
+                return;
+            }
+        }
+        if (card.entry !== block) {
+            card.entry = block;
+        }
+        if (card.description !== INSTRUCTIONS_NOTES) {
+            card.description = INSTRUCTIONS_NOTES;
+        }
+        const pin = (block !== "");
+        if (card.isPinned !== pin) {
+            card.isPinned = pin;
+        }
+        // AI Dungeon may refuse a pin, and a later hook's view of the card isn't guaranteed to carry isPinned,
+        // so the context hook reads this flag instead of the card
+        LoLa.pinned = pin && (card.isPinned === true);
     };
     // Put LoLa's block in front memory without disturbing what other scripts keep there
     const setFrontMemory = (block) => {
@@ -23551,6 +23617,14 @@ function LocalizedLanguages(hook, str) {
             // The stock pass below adds its own language block, so drop the old one here and in memory
             str = str.replace(LoLa.front.trim(), "");
             setFrontMemory("");
+        }
+        if (!optimized && isAdventureScript() && LoLa.pinned) {
+            // The same for an Adventure Script's pinned instructions card, which the stock pass would double
+            const entry = findInstructionsCard()?.entry;
+            if ((typeof entry === "string") && (entry !== "")) {
+                str = str.replace(entry, "");
+            }
+            setInstructionsCard("");
         }
         if (!optimized) {
             // Remove the language selection header and prepend a linebreak
@@ -23682,7 +23756,7 @@ function LocalizedLanguages(hook, str) {
         const scenarioLanguage = getScenarioLanguage();
         // Add instructions to context if required (avoid if able)
         const instruct = (context) => (
-            ((LoLa.language !== scenarioLanguage) || (S.USE_GENERIC_AI_INSTRUCTIONS === true))
+            wantsInstructions()
             ? tln.instructions.join("\n- ")
             : ""
         ) + (() => {
@@ -23724,7 +23798,13 @@ function LocalizedLanguages(hook, str) {
             // No header translation, no Author's Note reminder, and no truncation
             // The input hook already set front memory for this turn; this repairs it for the next one if another
             // script replaced it, since front memory changed here only reaches the model a turn later
-            setFrontMemory(frontBlock());
+            // Adventure Scripts use the pinned instructions card the same way
+            const adventureScript = isAdventureScript();
+            if (adventureScript) {
+                setInstructionsCard(cardBlock());
+            } else {
+                setFrontMemory(frontBlock());
+            }
             const additions = [];
             // The opening seed ends mid-scene, so the story continues on the same line like instruct() does
             let ending = "\n\n";
@@ -23751,12 +23831,21 @@ function LocalizedLanguages(hook, str) {
                 additions.push(tln.opening.join("\n\n"));
                 ending = " ";
             }
-            if ((LoLa.language !== scenarioLanguage) || (S.USE_GENERIC_AI_INSTRUCTIONS === true)) {
-                // The generic instructions only go in whole, and only if the append still fits in the room
-                // AI Dungeon leaves; otherwise it would cut them mid-list, or cut the seed that follows them
+            // Anything below only goes in whole, and only if the append still fits in the room AI Dungeon
+            // leaves; otherwise it would be cut mid-list, or cut the seed that follows it
+            const room = (Number.isInteger(info?.maxChars) ? info.maxChars : 0) - original.length - APPEND_MARGIN;
+            const fits = (addition) => ((["", addition, ...additions].join("\n\n") + ending).length <= room);
+            if (adventureScript && !LoLa.pinned) {
+                // The pin was refused, so the language block and reminder can only go in the append
+                const block = frontBlock();
+                if ((block !== "") && fits(block)) {
+                    additions.unshift(block);
+                }
+            }
+            if (wantsInstructions() && !(adventureScript && LoLa.pinned)) {
+                // The pinned instructions card already carries the generic instructions
                 const instructions = tln.instructions.join("\n- ");
-                const room = (Number.isInteger(info?.maxChars) ? info.maxChars : 0) - original.length - APPEND_MARGIN;
-                if ((["", instructions, ...additions].join("\n\n") + ending).length <= room) {
+                if (fits(instructions)) {
                     additions.unshift(instructions);
                 }
             }
@@ -23827,7 +23916,11 @@ function LocalizedLanguages(hook, str) {
     // Is this input a Do or Say action?
     const isDoSay = () => (str.startsWith("\n> "));
     // The input hook runs before AI Dungeon builds the context, so front memory set here reaches this turn
-    const syncFrontMemory = () => setFrontMemory(isOptimized() ? frontBlock() : "");
+    // Adventure Scripts never touch front memory and keep the instructions card in step instead
+    const syncFrontMemory = () => (isAdventureScript()
+        ? setInstructionsCard(isOptimized() ? cardBlock() : "")
+        : setFrontMemory(isOptimized() ? frontBlock() : "")
+    );
     syncFrontMemory();
     // Language command match
     const languageMatch = text.match(languagePattern);
@@ -23951,7 +24044,7 @@ function LocalizedLanguages(hook, str) {
         LoLa.card.show = true;
         return false;
     })();
-    // A new language needs its own block in front memory this turn
+    // A new language needs its own block in front memory (or the instructions card) this turn
     syncFrontMemory();
     (() => {
         // If Auto-Cards is installed, do some extra stuff

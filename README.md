@@ -18,6 +18,15 @@ It does not translate headers, edit the Author's Note, remove the `{Language: �
 
 **Auto-Cards pauses under Optimized Context.** Its card memories, trimming and generation prompts all rewrite the context, so with the setting on it passes the context through untouched. It won't start generating a card, and it won't capture a story output as a card. Card requests, including ones made with `/ac`, wait and resume once Optimized Context is off. Its control cards keep working.
 
+### Adventure Script installs
+**Adventure Scripts may not write front memory, so set `ADVENTURE_SCRIPT: true` in the copy you install as one.** The setting is in LoLa's settings at the top of `LocalizedLanguages`, and in the `MainSettings` control panel in `src/library.js`, which overrides it. The Adventure Script is built from `src`, the copy with Auto-Cards.
+
+- **Optimized Context on:** the language block, the generic instructions (when they apply) and the reminder go in a pinned story card titled `LoLa Instructions`, which AI Dungeon places near the end of the context. Nothing else about the Optimized Context path changes, except that the generic instructions are no longer appended, since the card carries them. LoLa writes the card in the Input tab and repairs it in the Context tab, as it does front memory.
+- **The pin is refused:** the language block and reminder go into the append instead, under the same room check as the generic instructions.
+- **Optimized Context off:** LoLa behaves exactly like a scenario install, which already works in an Adventure Script because it only edits the context text. The card is unpinned and emptied, not deleted, and on the first turn after switching LoLa removes the card's text from the context so the language block isn't doubled.
+
+With `ADVENTURE_SCRIPT: false`, the default, nothing above applies and front memory is used as described earlier.
+
 ### Bug fixes (apply with Optimized Context on or off)
 - **A mid-adventure language change no longer replaces that turn's output.** Stock LoLa overwrote the model's reply with a "Continue our story…" line, which then stayed in the story permanently. The prompt now goes once at the end of that turn's context instead.
 - **The reminder no longer deletes text after the last action.** When there was no Author's Note, stock LoLa rebuilt the end of the context from the last action's text and dropped anything after it, including other scripts' instructions.
@@ -25,7 +34,7 @@ It does not translate headers, edit the Author's Note, remove the `{Language: �
 Both fixes were found by the [InnerSelf-LoLa merge](https://github.com/DevilVonHell/InnerSelf-LoLa-Merge) (their K10 and K9).
 
 ### Tests
-`npm install`, then `npm test`. The suite runs the real library and tabs for both `src` variants in a small AI Dungeon sandbox (`test/aid.js`). It checks that output with Optimized Context off matches stock LoLa at commit `3a515ba`, that output with it on always begins with the original context byte-for-byte, and that LoLa's front memory block shares front memory with other scripts.
+`npm install`, then `npm test`. The suite runs the real library and tabs for both `src` variants in a small AI Dungeon sandbox (`test/aid.js`). It checks that output with Optimized Context off matches stock LoLa at commit `3a515ba`, that output with it on always begins with the original context byte-for-byte, that LoLa's front memory block shares front memory with other scripts, and that an Adventure Script install never writes front memory.
 
 ## Overview
 Localized Languages (LoLa) is a context overhaul script for playing AI Dungeon in your language of choice. LoLa also improves player inputs and supports (optional) [Auto-Cards](https://github.com/LewdLeah/Auto-Cards) integration. It’s free and open-source for anyone to use however they see fit. Creators are welcome to use LoLa for multilingual accessibility in their published scenarios. Fully compliant with international standard ISO 639-1 and more~ ❤️

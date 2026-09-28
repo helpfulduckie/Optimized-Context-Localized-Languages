@@ -31,19 +31,26 @@ function readSource(dir, file, commit) {
     return source.replace(/\r\n/g, "\n");
 }
 
-function getScript(variant, file, commit) {
-    const key = [variant, file, commit || "fork"].join("|");
+// adventureScript sets ADVENTURE_SCRIPT to true, the way the Adventure Script upload is configured
+function getScript(variant, file, commit, adventureScript = false) {
+    const key = [variant, file, commit || "fork", adventureScript].join("|");
     if (!scripts.has(key)) {
-        const source = readSource(VARIANTS[variant], file, commit);
+        let source = readSource(VARIANTS[variant], file, commit);
+        if (adventureScript) {
+            source = source.replace(/(?<=ADVENTURE_SCRIPT: )false/g, "true");
+        }
         scripts.set(key, new vm.Script(source, { filename: `${commit || "fork"}/${VARIANTS[variant]}/${file}` }));
     }
     return scripts.get(key);
 }
 
 class Adventure {
-    constructor({ variant = "full", stock = false } = {}) {
+    // refusePins makes every story card ignore isPinned = true, as AI Dungeon's unstated host limits may
+    constructor({ variant = "full", stock = false, adventureScript = false, refusePins = false } = {}) {
         this.variant = variant;
         this.commit = stock ? STOCK_COMMIT : null;
+        this.adventureScript = adventureScript;
+        this.refusePins = refusePins;
         this.state = {};
         this.storyCards = [];
         this.history = [];
@@ -52,7 +59,11 @@ class Adventure {
     }
 
     addStoryCard(keys = "", entry = "", type = "", title = keys, description = "") {
-        this.storyCards.push({ id: String(this.nextCardId++), keys, entry, type, title, description });
+        const card = { id: String(this.nextCardId++), keys, entry, type, title, description, isPinned: false };
+        if (this.refusePins) {
+            Object.defineProperty(card, "isPinned", { get: () => false, set: () => {}, enumerable: true });
+        }
+        this.storyCards.push(card);
         return this.storyCards.length;
     }
 
@@ -78,9 +89,9 @@ class Adventure {
             log: () => {},
             console
         });
-        getScript(this.variant, "library.js", this.commit).runInContext(context);
+        getScript(this.variant, "library.js", this.commit, this.adventureScript).runInContext(context);
         const hookScript = code === null
-            ? getScript(this.variant, `${hook}.js`, this.commit)
+            ? getScript(this.variant, `${hook}.js`, this.commit, this.adventureScript)
             : new vm.Script(code);
         const result = hookScript.runInContext(context);
         // history may have been reassigned by the library's own validation
