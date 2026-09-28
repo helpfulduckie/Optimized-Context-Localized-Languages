@@ -4,6 +4,11 @@
 // timestamping skips (see WTG-PATCHES.md).
 const SETTING = 'zz_Settings';
 
+// WTG patch: the Adventure Script flag as a single-line top-level const, so a
+// patchwork-press fileOverrides entry for library.js can stamp it at build time.
+// MainSettings and LoLa's own settings both read it (see WTG-PATCHES.md).
+const LOLA_ADVENTURE_SCRIPT = false;
+
 /*
 Main control panel for scenario creator convenience
 Settings defined here will override their counterparts elsewhere
@@ -32,7 +37,7 @@ globalThis.MainSettings = (class MainSettings {
         // (true or false)
         ,
         // Is LoLa installed as an Adventure Script? (keeps its instructions out of front memory)
-        ADVENTURE_SCRIPT: false
+        ADVENTURE_SCRIPT: LOLA_ADVENTURE_SCRIPT
         // (true or false)
         ,
         // Which language did you use to write your scenario's plot components?
@@ -208,7 +213,7 @@ function LocalizedLanguages(hook, str) {
     ,
     // Is LoLa installed as an Adventure Script? Adventure Scripts may not write front memory, so under
     // Optimized Context LoLa keeps its instructions in a pinned "LoLa Instructions" story card instead
-    ADVENTURE_SCRIPT: false
+    ADVENTURE_SCRIPT: LOLA_ADVENTURE_SCRIPT
     // (true or false)
     ,
     // Which language did you use to write your scenario's plot components?
@@ -23569,7 +23574,7 @@ function LocalizedLanguages(hook, str) {
             if (block === "") {
                 return;
             }
-            addStoryCard(INSTRUCTIONS_CARD, block, "class", INSTRUCTIONS_CARD, INSTRUCTIONS_NOTES);
+            addStoryCard(INSTRUCTIONS_CARD, block, SETTING, INSTRUCTIONS_CARD, INSTRUCTIONS_NOTES);
             card = findInstructionsCard();
             if (!card) {
                 return;
