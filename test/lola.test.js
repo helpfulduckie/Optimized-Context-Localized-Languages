@@ -139,6 +139,71 @@ describe.each(["full", "noAC"])("%s variant", (variant) => {
         });
     });
 
+    describe("Adventure Script install", () => {
+        const adventure = (options = {}) => ({ variant, adventureScript: true, ...options });
+        const instructionsCard = (a) => a.storyCards.find(card => card.title === "LoLa Instructions");
+
+        test("under Optimized Context keeps the guidance in a pinned card and never writes front memory", () => {
+            const a = adventureIn("german", adventure());
+            const context = buildContext();
+            const result = a.context(context, { optimized: true });
+            // The card carries the generic instructions, so nothing is appended mid-adventure
+            expect(result).toBe(context);
+            expect(a.state.memory).toBeUndefined();
+            const card = instructionsCard(a);
+            expect(card.isPinned).toBe(true);
+            expect(card.entry.startsWith("<SYSTEM lang=\"de\">")).toBe(true);
+            expect(card.entry).toContain(germanStrings().directives.trim());
+            expect(card.entry).toMatch(/\n\n[^\n]*\n- [\s\S]*\n\n\[ [^\]]+ \]$/);
+        });
+
+        test("the input hook writes the card so it reaches the same turn", () => {
+            const a = new Adventure(adventure()).skipOpening();
+            a.input("{Language: German}", { info: { actionCount: 10, useCacheEfficient: true } });
+            expect(instructionsCard(a).isPinned).toBe(true);
+            expect(instructionsCard(a).entry).toContain("<SYSTEM lang=\"de\">");
+            expect(a.state.memory).toBeUndefined();
+        });
+
+        test("an English adventure gets no card", () => {
+            const a = adventureIn("english", adventure());
+            const context = buildContext();
+            expect(a.context(context, { optimized: true })).toBe(context);
+            expect(instructionsCard(a)).toBeUndefined();
+        });
+
+        test("a refused pin moves the language block and reminder into the append", () => {
+            const a = adventureIn("german", adventure({ refusePins: true }));
+            const context = buildContext();
+            const result = a.context(context, { optimized: true });
+            expect(result.startsWith(context)).toBe(true);
+            const appended = result.slice(context.length);
+            expect(appended).toContain("<SYSTEM lang=\"de\">");
+            expect(appended).toMatch(/\n- [\s\S]*<SYSTEM[\s\S]*\n\n\[ [^\]]+ \]\n\n$/);
+            expect(a.state.memory).toBeUndefined();
+        });
+
+        test("without Optimized Context matches a scenario install and makes no card", () => {
+            const context = buildContext();
+            const a = adventureIn("german", adventure());
+            expect(a.context(context)).toBe(adventureIn("german", { variant }).context(context));
+            expect(instructionsCard(a)).toBeUndefined();
+            expect(a.state.memory).toBeUndefined();
+        });
+
+        test("turning Optimized Context off unpins the card without doubling the language block", () => {
+            const a = adventureIn("german", adventure());
+            a.context(buildContext(), { optimized: true });
+            const entry = instructionsCard(a).entry;
+            // AI Dungeon still includes the pinned card in this turn's context
+            const result = a.context(buildContext({ tail: "\n" + entry }));
+            expect(result.split("<SYSTEM lang=\"de\">").length).toBe(2);
+            expect(instructionsCard(a).isPinned).toBe(false);
+            expect(instructionsCard(a).entry).toBe("");
+            expect(a.state.memory).toBeUndefined();
+        });
+    });
+
     describe("reminder placement keeps text after the last action (K9)", () => {
         const tail = "\n\n<another script's instructions>";
 
