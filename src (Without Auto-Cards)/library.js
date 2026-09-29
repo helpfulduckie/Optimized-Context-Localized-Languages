@@ -23450,9 +23450,24 @@ function LocalizedLanguages(hook, str) {
         "This card's Notes have an example ready to copy; change it to your language.",
         "LoLa deletes this card once a language is set, so don't write anything here you want to keep."
     ].join("\n");
-    const REMINDER_NOTES = (
+    // Every language LoLa accepts, English first, each with its endonyms, one per paragraph
+    const languageList = () => Object.keys(factories).sort((a, b) => {
+        // English must be the first language
+        if (a === en) {
+            return -1;
+        } else if (b === en) {
+            return 1;
+        }
+        // Alphabetize the remaining languages
+        return a.localeCompare(b);
+    }).map(language => ([
+        language,
+        ...((language === en) ? [] : translations[language].endonyms)
+    ].map(lang => capitalize(lang)).join(" / "))).join("\n\n");
+    const reminderNotes = () => (
         "Copy into your next action, with your own language:\n{Language: Español}\n\n" +
-        "This card deletes itself once a language is set."
+        "This card deletes itself once a language is set.\n\n" +
+        "Any name below works, in English or in the language itself:\n\n" + languageList()
     );
     const findReminderCard = () => (Array.isArray(globalThis.storyCards) ? storyCards.findIndex(card => (
         (typeof card === "object") && (card !== null) && (card.title === REMINDER_CARD)
@@ -23464,7 +23479,7 @@ function LocalizedLanguages(hook, str) {
         }
         LoLa.noticed = true;
         if (findReminderCard() === -1) {
-            addStoryCard("", REMINDER_ENTRY, "class", REMINDER_CARD, REMINDER_NOTES);
+            addStoryCard("", REMINDER_ENTRY, "class", REMINDER_CARD, reminderNotes());
         }
         return str.trimEnd() + "\n\n" + REMINDER_NOTICE;
     }
@@ -23606,19 +23621,7 @@ function LocalizedLanguages(hook, str) {
                 "{Language: ???}",
                 tln.entry[2] + ":",
                 "{Language: ${Select your language or leave empty:}}"
-            ].join("\n\n"), "class", name, Object.keys(factories).sort((a, b) => {
-                // English must be the first language
-                if (a === en) {
-                    return -1;
-                } else if (b === en) {
-                    return 1;
-                }
-                // Alphabetize the remaining languages
-                return a.localeCompare(b);
-            }).map(language => ([
-                language,
-                ...((language === en) ? [] : translations[language].endonyms)
-            ].map(lang => capitalize(lang)).join(" / "))).join("\n\n"));
+            ].join("\n\n"), "class", name, languageList());
             i = getCardIndex();
             if ((0 < i) && (i < storyCards.length)) {
                 // Move the info card to the front of the array for clear visibility

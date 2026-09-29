@@ -4,7 +4,7 @@
 
 ### Added
 
-- **Language reminder for Adventure Script installs.** Until a language is chosen with `{Language: …}`, the first AI reply ends with a one-time notice, and a `LoLa: Set Language` story card holds a `{Language: …}` example to copy from its Notes. The card has no trigger words, so the AI never reads it, and it deletes itself once a language is set. Scenario installs are unchanged. The Output tab now calls `LocalizedLanguages("output", text)`; it does nothing outside Adventure Script installs.
+- **Language reminder for Adventure Script installs.** Until a language is chosen with `{Language: …}`, the first AI reply ends with a one-time notice, and a `LoLa: Set Language` story card holds a `{Language: …}` example to copy from its Notes, followed by every language name LoLa accepts. The card has no trigger words, so the AI never reads it, and it deletes itself once a language is set. Scenario installs are unchanged. The Output tab now calls `LocalizedLanguages("output", text)`; it does nothing outside Adventure Script installs.
 
 ### Fixed
 
