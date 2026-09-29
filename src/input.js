@@ -1,4 +1,12 @@
-// Your "Input" tab should look like this
+// ==========================================================
+// ======= Optimized Context LoLa - 1.0.2-oc.2 - input ======
+// ==========================================================
+// - LocalizedLanguages@1.0.2-oc.2
+// - AutoCards (as bundled with LoLa 1.0.2)
+// ==========================================================
+// Paste this ONLY into the input tab in AI Dungeon scripting
+// ==========================================================
+
 const modifier = (text) => {
   // Your other input modifier scripts go here (preferred)
   text = AutoCards("input", text);
