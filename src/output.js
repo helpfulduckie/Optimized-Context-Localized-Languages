@@ -9,6 +9,7 @@
 
 const modifier = (text) => {
   text = AutoCards("output", text);
+  text = LocalizedLanguages("output", text);
   return { text };
 };
 modifier(text);

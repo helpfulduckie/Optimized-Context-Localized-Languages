@@ -191,6 +191,69 @@ describe.each(["full", "noAC"])("%s variant", (variant) => {
             expect(a.state.memory).toBeUndefined();
         });
 
+        describe("language reminder", () => {
+            const NOTICE = "[LoLa: no language set. Delete this text and then include \"{Language: <LANGUAGE>}\" " +
+                "in your next action. See the \"LoLa: Set Language\" story card for more information]";
+            const reminderCard = (a) => a.storyCards.find(card => card.title === "LoLa: Set Language");
+            const fresh = (options = {}) => {
+                const a = new Adventure(adventure(options)).skipOpening();
+                a.input("\n> You look around.\n");
+                return a;
+            };
+
+            test("with no language chosen, the first output ends with the notice once", () => {
+                const a = fresh();
+                expect(a.output(" The steward nods.").text).toBe(" The steward nods.\n\n" + NOTICE);
+                expect(a.output(" Time passes.").text).toBe(" Time passes.");
+            });
+
+            test("the card has no keys, a copyable example in its Notes, and says it deletes itself", () => {
+                const a = fresh();
+                a.output(" The steward nods.");
+                const card = reminderCard(a);
+                expect(card.keys).toBe("");
+                expect(card.entry).toContain("{Language: <LANGUAGE>}");
+                expect(card.entry).toContain("deletes this card");
+                expect(card.description).toContain("{Language: Español}");
+                expect(card.description).toContain("deletes itself");
+            });
+
+            test.each(["German", "English"])("{Language: %s} deletes the card", (language) => {
+                const a = fresh();
+                a.output(" The steward nods.");
+                expect(reminderCard(a)).toBeDefined();
+                a.input("{Language: " + language + "}");
+                expect(reminderCard(a)).toBeUndefined();
+            });
+
+            test("a language chosen before the first output means no notice and no card", () => {
+                const a = new Adventure(adventure()).skipOpening();
+                a.input("{Language: German}");
+                expect(a.output(" Der Verwalter nickt.").text).toBe(" Der Verwalter nickt.");
+                expect(reminderCard(a)).toBeUndefined();
+            });
+
+            test("an adventure already in another language from an older version gets no reminder", () => {
+                const a = fresh();
+                // State as an older version left it: a language, and none of the reminder fields
+                // (rebuilt rather than deleted from, since LoLa seals it and AI Dungeon's JSON round trip unseals it)
+                const { chosen, noticed, pinned, ...older } = a.state.LocalizedLanguages;
+                a.state.LocalizedLanguages = { ...older, language: "german", card: { ...older.card } };
+                expect(a.output(" Der Verwalter nickt.").text).toBe(" Der Verwalter nickt.");
+                expect(reminderCard(a)).toBeUndefined();
+                // LoLa's state is sealed under "use strict", so pinning without a pinned field would throw
+                a.input("\n> You wait.\n", { info: { actionCount: 11, useCacheEfficient: true } });
+                expect(a.storyCards.find(card => card.title === "LoLa Instructions").isPinned).toBe(true);
+            });
+
+            test("a scenario install never shows the reminder", () => {
+                const a = new Adventure({ variant }).skipOpening();
+                a.input("\n> You look around.\n");
+                expect(a.output(" The steward nods.").text).toBe(" The steward nods.");
+                expect(reminderCard(a)).toBeUndefined();
+            });
+        });
+
         test("turning Optimized Context off unpins the card without doubling the language block", () => {
             const a = adventureIn("german", adventure());
             a.context(buildContext(), { optimized: true });

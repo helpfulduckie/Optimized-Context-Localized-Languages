@@ -37,7 +37,7 @@ function getScript(variant, file, commit, adventureScript = false) {
     if (!scripts.has(key)) {
         let source = readSource(VARIANTS[variant], file, commit);
         if (adventureScript) {
-            // The wtg branch reads the flag from a top-level const in src, the one fileOverrides stamps
+            // src reads the flag from a top-level const, the one Patchwork Press fileOverrides stamps
             source = source.replace(/(?<=ADVENTURE_SCRIPT(?:: | = ))false/g, "true");
         }
         scripts.set(key, new vm.Script(source, { filename: `${commit || "fork"}/${VARIANTS[variant]}/${file}` }));

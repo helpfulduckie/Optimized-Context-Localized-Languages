@@ -19,7 +19,7 @@
     "fileOverrides": { "library.js": { "LOLA_ADVENTURE_SCRIPT": true } }
   }
   ```
-  The `LoLa Instructions` card this turns on is also typed `SETTING`, so WTG doesn't timestamp it. `test/aid.js` stamps the const the same way for its Adventure Script tests.
+  The `LoLa Instructions` and `LoLa: Set Language` cards this turns on are also typed `SETTING`, so WTG doesn't timestamp them. `test/aid.js` stamps the const the same way for its Adventure Script tests; since `main` gained the same const, its harness does too.
 - **The hook tabs are bare glue.** Upstream's tab comments are dropped, since patchwork-press copies the modifier body into WTG's bundle. `src/input.js` also removes a `DELETABLE` card titled "LoLa Config", which older WTG + LoLa builds left in adventures.
 
 `src (Without Auto-Cards)` is not bundled by WTG and is unpatched.
