@@ -23672,11 +23672,7 @@ function LocalizedLanguages(hook, str) {
         }
         LoLa.noticed = true;
         if (findReminderCard() === -1) {
-<<<<<<< HEAD
-            addStoryCard("", REMINDER_ENTRY, SETTING, REMINDER_CARD, REMINDER_NOTES);
-=======
-            addStoryCard("", REMINDER_ENTRY, "class", REMINDER_CARD, reminderNotes());
->>>>>>> main
+            addStoryCard("", REMINDER_ENTRY, SETTING, REMINDER_CARD, reminderNotes());
         }
         return str.trimEnd() + "\n\n" + REMINDER_NOTICE;
     }
