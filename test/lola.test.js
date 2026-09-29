@@ -253,6 +253,37 @@ describe.each(["full", "noAC"])("%s variant", (variant) => {
             expect(adventure.output(model).text).not.toContain(model.trim());
         });
     });
+
+    describe("info card", () => {
+        // LoLa adds the card after 30 turns in one language
+        function infoCard(language) {
+            const adventure = adventureIn(language, { variant });
+            for (let turn = 0; turn < 40; turn++) {
+                adventure.actionCount++;
+                adventure.input("\n> You wait.\n");
+                adventure.context(buildContext());
+                adventure.output(" Time passes.");
+                const card = adventure.storyCards.find(({ title }) => title === "Localized Languages");
+                if (card) {
+                    return card;
+                }
+            }
+            throw new Error("no info card after 40 turns");
+        }
+
+        test("names OC-LoLa and links the repo instead of LewdLeah's profile", () => {
+            const [intro, link] = infoCard("english").entry.split("\n\n");
+            expect(intro).toBe("Optimized Context Localized Languages (OC-LoLa) v1.0.2-oc.2 is an open-source script for any AI Dungeon scenario. ❤️");
+            expect(link).toBe("https://github.com/helpfulduckie/Optimized-Context-Localized-Languages");
+        });
+
+        // Thai has no sentence terminator between the two sentences; Rhyme ends its first with a semicolon
+        test.each(["thai", "rhyme"])("keeps only the first sentence in %s", (language) => {
+            const [intro] = infoCard(language).entry.split("\n\n");
+            expect(intro).not.toMatch(/\{\d\}|LewdLeah|profile|โปรไฟล์/);
+            expect(intro).toMatch(/AI Dungeon.{0,20} ❤️$/);
+        });
+    });
 });
 
 describe("Auto-Cards under Optimized Context", () => {

@@ -1,4 +1,11 @@
-// Your "Library" tab should look like this
+// ============================================================
+// ======= Optimized Context LoLa - 1.0.2-oc.2 - library ======
+// ============================================================
+// - LocalizedLanguages@1.0.2-oc.2
+// - AutoCards (as bundled with LoLa 1.0.2)
+// ============================================================
+// Paste this ONLY into the library tab in AI Dungeon scripting
+// ============================================================
 
 // WTG patch: Auto-Cards control cards use WTG's system card type, which WTG's
 // timestamping skips (see WTG-PATCHES.md).
@@ -20,8 +27,9 @@ globalThis.MainSettings = (class MainSettings {
     //—————————————————————————————————————————————————————————————————————————————————
 
     /*
-    Localized Languages (LoLa) v1.0.2
-    Made by LewdLeah on August 13, 2025
+    Optimized Context Localized Languages (OC-LoLa) v1.0.2-oc.2
+    Made by helpfulduckie (aka Aness), based on Localized Languages (LoLa) v1.0.2 by LewdLeah (August 13, 2025)
+    Works with AI Dungeon's Optimized Context setting on or off
     This script allows players to enjoy AI Dungeon adventures in their preferred languages
     English-speaking scenario creators may appreciate the improved audience reach
     Non-English scenario creators are especially encouraged to write anything they desire
@@ -192,8 +200,9 @@ globalThis.MainSettings = (class MainSettings {
 //—————————————————————————————————————————————————————————————————————————————————————
 
 /*
-Localized Languages (LoLa) v1.0.2
-Made by LewdLeah on August 13, 2025
+Optimized Context Localized Languages (OC-LoLa) v1.0.2-oc.2
+Made by helpfulduckie (aka Aness), based on Localized Languages (LoLa) v1.0.2 by LewdLeah (August 13, 2025)
+Works with AI Dungeon's Optimized Context setting on or off
 This script allows players to enjoy AI Dungeon adventures in their preferred languages
 English-speaking scenario creators may appreciate the improved audience reach
 Non-English scenario creators are especially encouraged to write anything they desire
@@ -23724,15 +23733,26 @@ function LocalizedLanguages(hook, str) {
                 }
                 i = getCardIndex();
             }
+            // Keep only the first sentence of the translated intro, since the second points at LewdLeah's profile
+            // The sentence ends at the first terminator after {2}, or right after {2} in languages without one (Thai)
+            const intro = (() => {
+                const entry = tln.entry[0];
+                const start = entry.indexOf("{2}");
+                const end = entry.indexOf("{3}");
+                if ((start === -1) || (end < start)) {
+                    return entry.replace("{3}", "");
+                }
+                const sentence = entry.slice(start, end).match(/^[^.!?。！？।။።؟։།។۔~;]*[.!?。！？।။።؟։།។۔~;]/);
+                return (entry.slice(0, start) + (sentence ? sentence[0] : "{2}")).replace(/;$/, ".");
+            })();
             // Construct the info card with translated entry text
             // Create an alphabetical list of language names / endonyms in the info card notes
             addStoryCard(name, [
-                (tln.entry[0]
-                    .replace("{1}", "Localized Languages (LoLa) v1.0.2")
+                (intro
+                    .replace("{1}", "Optimized Context Localized Languages (OC-LoLa) v1.0.2-oc.2")
                     .replace("{2}", "AI Dungeon")
-                    .replace("{3}", "@LewdLeah")
                 ) + " ❤️",
-                "https://play.aidungeon.com/profile/LewdLeah",
+                "https://github.com/helpfulduckie/Optimized-Context-Localized-Languages",
                 tln.entry[1].replace("{4}", "Do/Say/Story") + ":",
                 "{Language: ???}",
                 tln.entry[2] + ":",

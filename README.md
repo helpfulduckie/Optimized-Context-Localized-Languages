@@ -1,44 +1,159 @@
-# Localized Languages (LoLa)
-Made by LewdLeah ❤️
+# Optimized Context Localized Languages (OC-LoLa)
 
-## About this fork: Optimized Context
-This fork makes LoLa work when AI Dungeon's **Optimized Context** setting is on. Optimized Context accepts a change to the context only if the script appends text to the end of it. Any other change, anywhere in the context, and AI Dungeon discards the script's whole context modification for that turn. Stock LoLa rewrites the context throughout, so under Optimized Context none of its language guidance reached the model.
+> Play AI Dungeon in your own language, on any AI Storyteller
 
-**With Optimized Context off (`info.useCacheEfficient` is false), LoLa works exactly as it always has,** apart from the two bug fixes below. Header translation, the Author's Note reminder, the language block and truncation are all unchanged.
+by helpfulduckie (aka Aness) | based on Localized Languages (LoLa) by LewdLeah ❤️
 
-**With Optimized Context on, the language guidance goes in front memory (`state.memory.frontMemory`).** AI Dungeon places front memory at the very end of the context and always keeps it, while text a script appends only gets whatever budget is left over and is cut off at the end when there isn't enough. LoLa writes the `<SYSTEM lang="…">` block with its two language directives, then the `[ reminder ]` line. It writes them in the Input tab so they reach the same turn, and checks them again in the Context tab in case another script replaced front memory; a Context-tab write only reaches the model on the next turn. Other scripts' front memory text is left in place, with LoLa's block after it.
+---
+## Table of Contents
 
-**Front memory holds only about the last 463 characters, and AI Dungeon cuts from the start.** LoLa's block is at most 257 characters in any language, with the reminder last. In a bundle, everything scripts put in front memory shares those 463 characters.
+- [Overview](#overview)
+- [How It Differs From the Original LoLa](#how-it-differs-from-the-original-lola)
+- [Installation](#installation)
+- [Choosing Your Language](#choosing-your-language)
+- [Supported Languages](#supported-languages)
+- [Tips](#tips)
+- [Troubleshooting](#troubleshooting)
+- [Credits](#credits)
 
-**Everything else is appended, and only when it fits:**
-- the generic instructions, when your language differs from the scenario's (or `USE_GENERIC_AI_INSTRUCTIONS` is on). They go in whole only if `info.maxChars` minus the context length, minus a 2500-character margin, leaves room for them, and are skipped that turn otherwise. The margin was measured live: about 960 characters plus 3.6 per token of response length.
-- the opening seed, at the start of an adventure or once after a mid-adventure language change
-
-It does not translate headers, edit the Author's Note, remove the `{Language: …}` command, or truncate. The "You"/"You say" prefix of Do/Say actions is still rewritten into your language as you submit them, because that happens in the Input tab, which Optimized Context doesn't restrict.
-
-**Auto-Cards pauses under Optimized Context.** Its card memories, trimming and generation prompts all rewrite the context, so with the setting on it passes the context through untouched. It won't start generating a card, and it won't capture a story output as a card. Card requests, including ones made with `/ac`, wait and resume once Optimized Context is off. Its control cards keep working.
-
-### Adventure Script installs
-**Adventure Scripts may not write front memory, so set `ADVENTURE_SCRIPT: true` in the copy you install as one.** The setting is in LoLa's settings at the top of `LocalizedLanguages`, and in the `MainSettings` control panel in `src/library.js`, which overrides it. The Adventure Script is built from `src`, the copy with Auto-Cards.
-
-- **Optimized Context on:** the language block, the generic instructions (when they apply) and the reminder go in a pinned story card titled `LoLa Instructions`, which AI Dungeon places near the end of the context. Nothing else about the Optimized Context path changes, except that the generic instructions are no longer appended, since the card carries them. LoLa writes the card in the Input tab and repairs it in the Context tab, as it does front memory.
-- **The pin is refused:** the language block and reminder go into the append instead, under the same room check as the generic instructions.
-- **Optimized Context off:** LoLa behaves exactly like a scenario install, which already works in an Adventure Script because it only edits the context text. The card is unpinned and emptied, not deleted, and on the first turn after switching LoLa removes the card's text from the context so the language block isn't doubled.
-
-With `ADVENTURE_SCRIPT: false`, the default, nothing above applies and front memory is used as described earlier.
-
-### Bug fixes (apply with Optimized Context on or off)
-- **A mid-adventure language change no longer replaces that turn's output.** Stock LoLa overwrote the model's reply with a "Continue our story…" line, which then stayed in the story permanently. The prompt now goes once at the end of that turn's context instead.
-- **The reminder no longer deletes text after the last action.** When there was no Author's Note, stock LoLa rebuilt the end of the context from the last action's text and dropped anything after it, including other scripts' instructions.
-
-Both fixes were found by the [InnerSelf-LoLa merge](https://github.com/DevilVonHell/InnerSelf-LoLa-Merge) (their K10 and K9).
-
-### Tests
-`npm install`, then `npm test`. The suite runs the real library and tabs for both `src` variants in a small AI Dungeon sandbox (`test/aid.js`). It checks that output with Optimized Context off matches stock LoLa at commit `3a515ba`, that output with it on always begins with the original context byte-for-byte, that LoLa's front memory block shares front memory with other scripts, and that an Adventure Script install never writes front memory.
+---
 
 ## Overview
-Localized Languages (LoLa) is a context overhaul script for playing AI Dungeon in your language of choice. LoLa also improves player inputs and supports (optional) [Auto-Cards](https://github.com/LewdLeah/Auto-Cards) integration. It’s free and open-source for anyone to use however they see fit. Creators are welcome to use LoLa for multilingual accessibility in their published scenarios. Fully compliant with international standard ISO 639-1 and more~ ❤️
+
+Localized Languages lets you play AI Dungeon in the language you actually speak. Tell it your language once and the AI Storyteller writes the whole adventure in it. It supports 263 languages and styles, from Spanish and Japanese to Klingon, Pirate, and Brainrot.
+
+This version keeps working when AI Dungeon's **Optimized Context** setting is on. The original LoLa silently does not reach the AI under that setting, so the story never makes it into your language or drifts back into English. This one doesn't.
+
+### Features
+
+- Any Language - 263 languages and styles, including romanized "(abc)" versions of languages with non-Latin scripts.
+- Better Player Inputs - your "You..." and "You say..." actions are rewritten into your language as you submit them.
+- Optimized Context Support - play with all your favorite AI Storyteller models.
+- Adventure Script Support - add LoLa to any adventure or scenario, whether you are on mobile or mid-adventure.
+- Plays Well With Others - LoLa leaves other scripts' instructions in place, and is bundled with [World Time Generator](https://github.com/helpfulduckie/World-Time-Generator-3).
+- Optional [Auto-Cards](https://github.com/LewdLeah/Auto-Cards) - automatic story card generation by LewdLeah, included in one version of the script.
+
+### Help Test It
+
+This is a new release, and its author only speaks English. It has been checked on Optimized Context AI Storytellers, both as a scenario script and as an Adventure Script, to confirm LoLa's instructions reach the AI. What hasn't been checked is how well the AI Storyteller actually writes in each language. If you play in a language other than English, reports of how it went are very welcome, good or bad. Contact details are at the [bottom of this page](#credits).
+
+---
+
+## How It Differs From the Original LoLa
+
+**On an Optimized Context AI Storyteller, the original LoLa's instructions never reach the AI; this version's do.** Optimized Context only lets a script add text to the end of what the AI reads. The original LoLa edits that text throughout, so AI Dungeon throws its changes away every turn. This version places its language instructions where Optimized Context allows them.
+
+**Without Optimized Context, this version plays exactly like the original**, plus two bug fixes:
+
+- Changing language mid-adventure no longer replaces the AI's reply with a "Continue our story…" line that stays in your story for good.
+- LoLa no longer deletes other scripts' instructions when your scenario has no Author's Note.
+
+**With Optimized Context on, a few of the original's extras are skipped**, because they would require editing text Optimized Context doesn't allow scripts to touch:
+
+- The section labels AI Dungeon puts on what the AI reads, such as "Recent Story" and "World Lore", stay in English.
+- The `{Language: …}` command stays in the text the AI reads rather than being hidden from it.
+- The bundled Auto-Cards pauses. It won't generate new cards until Optimized Context is off, and any card requests wait until then.
+
+**LoLa shares a small space with other scripts.** Under Optimized Context, LoLa's instructions go in a slot at the very end of what the AI reads, which holds about 460 characters. LoLa uses at most about 260 of them. If you run several scripts that use the same slot, they share it.
+
+---
+
+## Installation
+
+There are two ways to add LoLa to your scenario or adventure.
+
+### Adventure Scripts
+
+This method is ideal for authors writing scenarios from their phone, or players who want to add LoLa to an adventure already in progress.
+
+1. Go to [Optimized Context Localized Languages on AI Dungeon](https://play.aidungeon.com/script/wJjCxUMyTMjP/optimized-context-localized-languages) and click `Save`
+
+2. Navigate to the Scripts configuration controls on AI Dungeon:
+
+	- On any Adventure (aka Save), click Edit and then navigate to the `Scripts` tab (to the right of `Details`).
+
+	- On a Scenario you own, click Edit and then scroll down on the `Details` tab to the `SCRIPTS` subsection.
+
+3. Click the `+ Add Script` button. Select `Optimized Context Localized Languages` from the popup menu.
+
+4. Choose your language (see [Choosing Your Language](#choosing-your-language)).
+
+The Adventure Script includes Auto-Cards. Under Optimized Context it keeps its instructions in a pinned `LoLa Instructions` story card (see [Troubleshooting](#what-is-this-lola-instructions-story-card)).
+
+### Script Editor
+
+If you are adding LoLa to a scenario you own, you can instead use the Scenario Script Editor.
+
+<details>
+
+<summary>Script Editor install steps</summary>
+
+#### Step 1: Choose Your Version
+
+| Folder | Use when... |
+| ------ | ----------- |
+| [`src`](./src) | You want LoLa with Auto-Cards |
+| [`src (Without Auto-Cards)`](./src%20%28Without%20Auto-Cards%29) | You want LoLa on its own |
+
+> IMPORTANT: Do not mix and match files from the two folders. Use all four files from the same folder in Step 2.
+
+If you want LoLa together with World Time Generator, use WTG's "wtg-lola" version instead, which already contains both.
+
+#### Step 2: Install the Scripts
+
+1. Go to [AI Dungeon](https://aidungeon.com/) on a desktop browser (or switch to desktop view on mobile)
+2. [Create a new scenario](https://help.aidungeon.com/faq/what-are-scenarios) or open one you're editing
+3. Open the **Details** tab
+4. Scroll down to **Scripting** and toggle **Scripts Enabled** ON
+5. Click **Edit Scripts**
+6. For each of the four tabs below, delete any existing code and paste in the *full* contents of the corresponding file from the folder you chose in Step 1:
+
+| Script Tab | File |
+| ---------- | ---- |
+| Library | `library.js` |
+| Input | `input.js` |
+| Context | `context.js` |
+| Output | `output.js` |
+
+7. Click the yellow **Save** button
+8. Choose your language (see [Choosing Your Language](#choosing-your-language))
+
+</details>
+
+---
+
+## Choosing Your Language
+
+LoLa needs to be told which language to use. Until it is, it plays in English.
+
+### For Players
+
+Type `{Language: ???}` into any Do, Say, or Story action, replacing `???` with your language. For example:
+
+```
+{Language: Spanish}
+```
+
+You can change language the same way at any point in an adventure.
+
+### For Scenario Authors
+
+Add this line anywhere in your scenario's Opening:
+
+```
+{Language: ${Select your (real) language or leave empty:}}
+```
+
+Players are then asked for their language when they start your scenario, and LoLa picks it up automatically. Players who leave it empty get English.
+
+**This step is optional, but it matters a lot.** Most players never read a scenario's description, so they won't know to type the command themselves. Asking in the Opening is the only way most of them will ever find out LoLa is there to help.
+
+---
+
 ## Supported Languages
+
+LoLa covers every language in the ISO 639-1 standard, plus a handful of just-for-fun styles.
+
 <details>
 <summary>Expand to view the full list of supported languages! 🌐</summary>
   
@@ -307,99 +422,69 @@ Localized Languages (LoLa) is a context overhaul script for playing AI Dungeon i
 263. Zulu / Isizulu
 </details>
 
-## Gameplay Suggestions
-- Dear Creators, please add `{Language: ${Select your (real) language or leave empty:}}` to your scenario Opening!
-- Adventure quality varies between different AI models, so try multiple
-- Quality also varies between different languages, especially rare ones
+---
+
+## Tips
+
+- Adventure quality varies between AI models, so try more than one
+- Quality also varies between languages, especially rare ones
 - Use a response length of 200 tokens for the best results
-- Romanized language variants "(abc)" are not necessarily more coherent
-- Try to remain consistent by using only your selected language
-- Writing a custom opening in your language is helpful, though optional
-- The "Retry" button is your friend, especially near the beginning of new adventures
+- Romanized "(abc)" versions are not necessarily more coherent than the native script
+- Stay consistent by writing only in your selected language
+- A custom Opening written in your language helps, though it's optional
+- The Retry button is your friend, especially near the beginning of a new adventure
 - Muse, Dynamic Small, and Wayfarer Small (in that order) may struggle with non-English
-- Among the free models, Madness is (seemingly) the best for multilingual writing
-## Permission
-LoLa is both free and open-source for anyone to use within their own scenarios or scripts, even including published works. You have my full permission to use, copy, or modify LoLa. Please enjoy! ❤️
-## Scenario Script Installation Guide
-1. Use the [AI Dungeon website](https://aidungeon.com/) on PC (or view as desktop if mobile-only)
-2. [Create a new scenario](https://help.aidungeon.com/faq/what-are-scenarios) or edit one of your existing scenarios
-3. Open the `DETAILS` tab at the top while editing your scenario
-4. Scroll down to `Scripting` and toggle ON → `Scripts Enabled`
-5. Select `EDIT SCRIPTS`
-6. Select the `Input` tab on the left
-7. Delete all code within said tab
-8. Copy and paste the following code into your empty `Input` tab:
-```javascript
-// Your "Input" tab should look like this
-const modifier = (text) => {
-  // Your other input modifier scripts go here (preferred)
-  text = AutoCards("input", text);
-  text = LocalizedLanguages("input", text);
-  // Your other input modifier scripts go here (alternative)
-  return { text };
-};
-modifier(text);
-```
-9. Select the `Context` tab on the left
-10. Delete all code within said tab
-11. Copy and paste the following code into your empty `Context` tab:
-```javascript
-// Your "Context" tab should look like this
-const modifier = (text) => {
-  // Your other context modifier scripts go here (preferred)
-  [text, stop] = AutoCards("context", text, stop);
-  text = LocalizedLanguages("context", text);
-  // Your other context modifier scripts go here (risky)
-  return { text, stop };
-};
-modifier(text);
-```
-12. Select the `Output` tab on the left
-13. Delete all code within said tab
-14. Copy and paste the following code into your empty `Output` tab:
-```javascript
-// Your "Output" tab should look like this
-const modifier = (text) => {
-  // Your other output modifier scripts go here (preferred)
-  text = AutoCards("output", text);
-  // Your other output modifier scripts go here (alternative)
-  return { text };
-};
-modifier(text);
-```
-15. Select the `Library` tab on the left
-16. Delete all code within said tab
-17. Open the Library code (hyperlink below) in a new browser tab
-- [Library code](./src/library.js)
-18. Copy the *full* code from the page above and paste into your empty `Library` tab
-19. Click the big yellow `SAVE` button in the top right corner
-20. For private/personal use, submit `{Language: ???}` using Do/Say/Story (replace `???` with your language)
-21. When publishing scenarios, add `{Language: ${Select your (real) language or leave empty:}}` to the Opening
-22. Step 21 is optional, but still VERY important! (defaults to English if blank) ❤️
+- Among the free models, Madness seems to be the best for multilingual writing
 
-<details>
-<summary>Expand to learn why step 21 matters so much ℹ️</summary>
-​
+Tips from LewdLeah's original LoLa. Model recomendations have not been reevaluated since 2025.
 
-TL;DR - It's about effective communication, a seamless user experience, and good alignment between player expectations and actual scenario gameplay.
+---
 
-LoLa _relies_ on step 21 (or step 20) in order to correctly identify the requested language. If your scenario lacks this placeholder, then the script simply defaults to English every time, because it can't read the player's mind. Think of the {Language: ...} thingy like a command; it's how the script detects which language to engage, behind the scenes. Therefore, I _strongly_ recommend including `{Language: ${Select your (real) language or leave empty:}}` anywhere within your scenario's Opening plot component. At the top, bottom, or anywhere in-between. Your choice.
+## Troubleshooting
 
-Players of published works aren't going to understand this on their own, so it's extremely helpful for Creators to follow this step. And, if there's one thing I've learned from AI Dungeon players, it's that virtually no one reads the description. And that may be especially true for the players we're trying to help the most here.
+### The AI Storyteller is still writing in English
 
-Anyway, including this placeholder _dramatically_ simplifies usage and prevents confusion. As a Creator myself, I strongly believe a seamless user experience is the _most important characteristic_ of highly successful AI Dungeon scenarios. That's my personal opinion.
+Check that you've told LoLa your language (see [Choosing Your Language](#choosing-your-language)). If you have, hit Retry a few times; the first turns of an adventure are the most likely to slip. Some AI models and some rarer languages simply work less well, so see [Tips](#tips) for which models to try.
 
-Genuinely...and I mean this with kindness: __Assume players know nothing.__ So make things easy for them. Think of it as yet another dimension to accessibility. Simplicity and straightforwardness are key, because above all else, AI Dungeon players expect things to work on their own.
+### What is this `LoLa Instructions` story card?
 
-Thanks for listening, sorry about the excessive wall of text. 😅
-</details>
+> And can I unpin it?
 
-## Useful Links
-### Simple demo scenario
-- [Localized Languages](https://play.aidungeon.com/scenario/AX2nXYIPzcKd/localized-languages)
-### My AI Dungeon profile page
-- [LewdLeah](https://play.aidungeon.com/profile/LewdLeah)
-### LoLa discussion thread
-- [Localized Languages - discussion](https://discord.com/channels/903327676884979802/1406127682365816852)
-- [AI Dungeon official Discord server invite](https://discord.gg/MXNqpSbuZT) (required to access the first link)
-- Feel free to ping me anytime @LewdLeah if you'd like to chat or share ideas. But please remember this is a personal passion project for me, something I do because I enjoy it, not as a job. Your kindness, patience, and love mean so much to me~ ❤️
+If you installed LoLa as an Adventure Script and are playing on an Optimized Context AI Storyteller, LoLa keeps its language instructions to the AI Storyteller in this pinned story card. Adventure Scripts aren't allowed to use the memory slot the Script Editor version uses, and a pinned card is the next closest place to the end of what the AI reads.
+
+You should not delete, modify, or unpin this card manually. LoLa manages it automatically, and empties and unpins it when you switch to an AI Storyteller without Optimized Context.
+
+### Auto-Cards stopped making cards
+
+Auto-Cards pauses while Optimized Context is on (see [How It Differs From the Original LoLa](#how-it-differs-from-the-original-lola)). Your card requests wait and resume when you switch to an AI Storyteller without Optimized Context.
+
+---
+
+## Credits
+
+**Localized Languages (LoLa) and Auto-Cards**
+LewdLeah — 2025
+
+**Optimized Context modifications**
+helpfulduckie (aka Aness) — 2026
+
+**Bug fixes** found by the [InnerSelf-LoLa merge](https://github.com/DevilVonHell/InnerSelf-LoLa-Merge).
+
+**License:** MIT — see the LICENSE file. In LewdLeah's words: "You have my full permission to use, copy, or modify LoLa." That includes your own published scenarios and scripts. 
+
+**Try it:** [Optimized Context Localized Languages sample scenario](https://play.aidungeon.com/scenario/rBsB8Vv5C4UU/optimized-context-localized-languages)
+
+**Original LoLa by LewdLeah**
+- [Original Localized Languages repository](https://github.com/LewdLeah/Localized-Languages)
+- [Original LoLa demo scenario](https://play.aidungeon.com/scenario/AX2nXYIPzcKd/localized-languages)
+- [LewdLeah's AI Dungeon profile](https://play.aidungeon.com/profile/LewdLeah)
+- [LoLa discussion thread](https://discord.com/channels/903327676884979802/1406127682365816852) on the [AI Dungeon Discord server](https://discord.gg/MXNqpSbuZT) (join the server first)
+
+**What's new:** see [CHANGELOG.md](./CHANGELOG.md).
+
+**Developers:** see [DEVELOPMENT.md](./DEVELOPMENT.md) for how this version works under the hood and how to run the tests.
+
+---
+
+**Questions or bug reports?**
+Discord: Aness (helpfulduckie) | Email: helpfulduckie@gmail.com
