@@ -7,6 +7,11 @@
 // Paste this ONLY into the library tab in AI Dungeon scripting
 // ============================================================
 
+// WTG patch: the Adventure Script flag as a single-line top-level const, so a
+// patchwork-press fileOverrides entry for library.js can stamp it at build time.
+// MainSettings and LoLa's own settings both read it (see WTG-PATCHES.md).
+const LOLA_ADVENTURE_SCRIPT = false;
+
 /*
 Main control panel for scenario creator convenience
 Settings defined here will override their counterparts elsewhere
@@ -36,7 +41,7 @@ globalThis.MainSettings = (class MainSettings {
         // (true or false)
         ,
         // Is LoLa installed as an Adventure Script? (keeps its instructions out of front memory)
-        ADVENTURE_SCRIPT: false
+        ADVENTURE_SCRIPT: LOLA_ADVENTURE_SCRIPT
         // (true or false)
         ,
         // Which language did you use to write your scenario's plot components?
