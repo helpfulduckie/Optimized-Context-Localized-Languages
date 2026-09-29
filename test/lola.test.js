@@ -216,6 +216,9 @@ describe.each(["full", "noAC"])("%s variant", (variant) => {
                 expect(card.entry).toContain("deletes this card");
                 expect(card.description).toContain("{Language: Español}");
                 expect(card.description).toContain("deletes itself");
+                // The same list of accepted names the info card's Notes carry, English first
+                expect(card.description).toMatch(/Any name below works[^\n]*\n\nEnglish\n\n/);
+                expect(card.description).toContain("\n\nGerman / Deutsch\n\n");
             });
 
             test.each(["German", "English"])("{Language: %s} deletes the card", (language) => {
