@@ -8,6 +8,7 @@
 
 const modifier = (text) => {
   // Your output modifier scripts go here
+  text = LocalizedLanguages("output", text);
   return { text };
 };
 modifier(text);

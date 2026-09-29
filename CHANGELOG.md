@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Language reminder for Adventure Script installs.** Until a language is chosen with `{Language: …}`, the first AI reply ends with a one-time notice, and a `LoLa: Set Language` story card holds a `{Language: …}` example to copy from its Notes. The card has no trigger words, so the AI never reads it, and it deletes itself once a language is set. Scenario installs are unchanged. The Output tab now calls `LocalizedLanguages("output", text)`; it does nothing outside Adventure Script installs.
+
+### Fixed
+
+- **The Adventure Script version no longer errors on an adventure whose LoLa state predates Adventure Script support,** such as one started with LewdLeah's LoLa, the first time it pins its `LoLa Instructions` card under Optimized Context.
+
 ## 1.0.2-oc.2
 
 First public release of Optimized Context LoLa, based on Localized Languages (LoLa) 1.0.2 by LewdLeah.

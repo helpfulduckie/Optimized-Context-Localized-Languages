@@ -22530,6 +22530,10 @@ function LocalizedLanguages(hook, str) {
             front: "",
             // The "LoLa Instructions" card was pinned by LoLa's last write (Adventure Script installs only)
             pinned: false,
+            // The player chose a language with {Language: ...} (the Adventure Script reminder waits for this)
+            chosen: false,
+            // The Adventure Script reminder notice has been shown
+            noticed: false,
             // Tracking for an informational story card
             card: {
                 // Previous action count, used for retry/erase detection
@@ -23287,6 +23291,10 @@ function LocalizedLanguages(hook, str) {
     // Adventures started before the front memory fields existed
     state.LocalizedLanguages.optimized ??= false;
     state.LocalizedLanguages.front ??= "";
+    state.LocalizedLanguages.pinned ??= false;
+    // An adventure that already reads in another language had one chosen
+    state.LocalizedLanguages.chosen ??= (state.LocalizedLanguages.language !== en);
+    state.LocalizedLanguages.noticed ??= false;
     // Shorthand reference to the LoLa state
     const LoLa = Object.seal(state.LocalizedLanguages);
     Object.seal(LoLa.card);
@@ -23426,6 +23434,40 @@ function LocalizedLanguages(hook, str) {
         state.memory.frontMemory = others + added;
         LoLa.front = added;
     };
+    // Adventure Script installs are mostly added by players who want a language other than English, often to a
+    // scenario whose creator never set one up. Until a language is chosen, the first output gets a one-time
+    // notice and a card holds a {Language: ...} example to copy. The card has no keys, so it never reaches the
+    // context, and it is deleted once a language is chosen.
+    const REMINDER_CARD = "LoLa: Set Language";
+    const REMINDER_NOTICE = (
+        "[LoLa: no language set. Delete this text and then include \"{Language: <LANGUAGE>}\" in your next " +
+        "action. See the \"" + REMINDER_CARD + "\" story card for more information]"
+    );
+    const REMINDER_ENTRY = [
+        "Localized Languages has no language set for this adventure, so the story continues in English.",
+        "To play in another language, include {Language: <LANGUAGE>} in your next action (Do, Say or Story), " +
+        "with the language's name in English or in the language itself.",
+        "This card's Notes have an example ready to copy; change it to your language.",
+        "LoLa deletes this card once a language is set, so don't write anything here you want to keep."
+    ].join("\n");
+    const REMINDER_NOTES = (
+        "Copy into your next action, with your own language:\n{Language: Español}\n\n" +
+        "This card deletes itself once a language is set."
+    );
+    const findReminderCard = () => (Array.isArray(globalThis.storyCards) ? storyCards.findIndex(card => (
+        (typeof card === "object") && (card !== null) && (card.title === REMINDER_CARD)
+    )) : -1);
+    if (hook === "output") {
+        // Called from the Output modifier, only for the Adventure Script reminder
+        if (!isAdventureScript() || LoLa.chosen || LoLa.noticed || (typeof str !== "string")) {
+            return str;
+        }
+        LoLa.noticed = true;
+        if (findReminderCard() === -1) {
+            addStoryCard("", REMINDER_ENTRY, "class", REMINDER_CARD, REMINDER_NOTES);
+        }
+        return str.trimEnd() + "\n\n" + REMINDER_NOTICE;
+    }
     if (hook === "context") {
         // Called from the Context modifier
         // Optimized Context discards the whole returned context unless it only appends to the original
@@ -23876,6 +23918,12 @@ function LocalizedLanguages(hook, str) {
         LoLa.card.show = true;
         return false;
     })();
+    // A language is chosen, so the Adventure Script reminder goes
+    LoLa.chosen = true;
+    const reminderIndex = findReminderCard();
+    if (reminderIndex !== -1) {
+        removeStoryCard(reminderIndex);
+    }
     // A new language needs its own block in front memory (or the instructions card) this turn
     syncFrontMemory();
     (() => {
